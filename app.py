@@ -1,8 +1,10 @@
-# universal_dashboard.py
 import streamlit as st
 import pandas as pd
 import sqlite3
 import os
+import plotly.express as px
+import seaborn as sns
+import matplotlib.pyplot as plt
 
 st.set_page_config(page_title="Universal Data Analyzer", layout="wide")
 st.title("📊 Universal Data Analysis Tool")
@@ -51,6 +53,13 @@ if selected_table != "No tables yet":
     st.subheader(f"🔎 Data from `{selected_table}`")
     st.dataframe(df)
 
+    # KPI Summary
+    st.markdown("### 📌 Key Stats")
+    col1, col2, col3 = st.columns(3)
+    col1.metric("Total Rows", f"{len(df):,}")
+    col2.metric("Null %", f"{df.isnull().mean().mean()*100:.2f}%")
+    col3.metric("Unique Records", f"{df.drop_duplicates().shape[0]}")
+
     # Filtering
     st.markdown("### 🔍 Filter and Group")
     cols = df.columns.tolist()
@@ -65,8 +74,8 @@ if selected_table != "No tables yet":
 
     st.dataframe(filtered_df)
 
-    # Grouping
-    st.markdown("### 🧮 Group and Aggregate")
+    # Grouping + Charts
+    st.markdown("### 🧮 Group and Visualize")
     group_col = st.selectbox("Group by column", options=cols)
     agg_col = st.selectbox("Aggregate column", options=cols)
     agg_func = st.selectbox("Aggregation function", ["sum", "mean", "count", "max", "min"])
@@ -74,7 +83,33 @@ if selected_table != "No tables yet":
     if pd.api.types.is_numeric_dtype(df[agg_col]):
         grouped = filtered_df.groupby(group_col)[agg_col].agg(agg_func).reset_index()
         st.write(grouped)
-        st.bar_chart(grouped.set_index(group_col))
+
+        chart_type = st.selectbox("Chart Type", ["Bar", "Line", "Area", "Pie"])
+        if chart_type == "Bar":
+            st.bar_chart(grouped.set_index(group_col))
+        elif chart_type == "Line":
+            st.line_chart(grouped.set_index(group_col))
+        elif chart_type == "Area":
+            st.area_chart(grouped.set_index(group_col))
+        elif chart_type == "Pie":
+            fig = px.pie(grouped, names=group_col, values=agg_col)
+            st.plotly_chart(fig)
+
+    # Histogram
+    st.markdown("### 📈 Value Distribution")
+    numeric_cols = df.select_dtypes(include=['int64', 'float64']).columns.tolist()
+    if numeric_cols:
+        selected_col = st.selectbox("Column for Histogram", numeric_cols)
+        fig = px.histogram(df, x=selected_col, nbins=30)
+        st.plotly_chart(fig)
+
+    # Correlation Heatmap
+    st.markdown("### 📊 Correlation Heatmap")
+    if len(numeric_cols) >= 2:
+        corr = df[numeric_cols].corr()
+        fig, ax = plt.subplots()
+        sns.heatmap(corr, annot=True, cmap="coolwarm", ax=ax)
+        st.pyplot(fig)
 
     st.markdown("---")
     st.subheader("📤 Export Filtered Data")
